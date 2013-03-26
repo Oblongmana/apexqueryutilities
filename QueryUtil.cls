@@ -215,7 +215,7 @@ public class QueryUtil {
                 }
             }
 
-            result = '(select ' + String.join(fieldRequests,', ') + ' from ' + sObjectName + ' ' + remainder + ')'; 
+            result = 'select ' + String.join(fieldRequests,', ') + ' from ' + sObjectName + ' ' + remainder; 
 
         } else {
             // System.debug('Either query string not in correct format or doesnt need transforming');
