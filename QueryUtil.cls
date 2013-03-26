@@ -1,9 +1,8 @@
 /*
  * Static methods to extend standard SOQL query capabilities.
  *
- * @author: Luke 
- * @author: James
- * @date: Dec 2012 - Mar 2013
+ * @author: Luke
+ * @date: Dec 2012
  */
 public class QueryUtil {
 
@@ -24,8 +23,8 @@ public class QueryUtil {
                 regex_regularOrStarOrDotField_NonCap +
             ')*';
 
-    public static final String regex_InnerQuery_NonCap = ('select\\s+'+regexChunk_FieldNames_Composite_InnerQuery_NonCap+'\\s+from\\s+\\w+.*');
-    public static final String regex_InnerQuery_Cap = ('select\\s+('+regexChunk_FieldNames_Composite_InnerQuery_NonCap+')\\s+from\\s+(\\w+)(.*)');
+    public static final String regex_InnerQuery_NonCap = ('(?i)select\\s+'+regexChunk_FieldNames_Composite_InnerQuery_NonCap+'\\s+from\\s+\\w+.*');
+    public static final String regex_InnerQuery_Cap = ('(?i)select\\s+('+regexChunk_FieldNames_Composite_InnerQuery_NonCap+')\\s+from\\s+(\\w+)(.*)');
 
     public static final String regexChunk_FieldNames_RelationshipNest = ('\\s*\\(\\s*'+regex_InnerQuery_NonCap+'\\s*\\)\\s*');
 
@@ -40,7 +39,7 @@ public class QueryUtil {
                 ')*' +
             ')';
     
-    public static final String regex_OuterQuery = ('^select\\s+' + regexChunk_FieldNames_Composite_OuterQuery + '\\s+from\\s+([^\\s]+)(.*)$');
+    public static final String regex_OuterQuery = ('(?i)select\\s+' + regexChunk_FieldNames_Composite_OuterQuery + '\\s+from\\s+([^\\s]+)(.*)');
 
     private static Map<String,SObjectType> GlobalDescribeCache {
             get { 
@@ -71,8 +70,14 @@ public class QueryUtil {
         String queryStr = getTransformedQueryStr(query);
         // System.debug('About to perform query: ' + queryStr);
 
-        result = Database.query(queryStr);
-        // System.debug('Returning ' + result.size() + ' result(s)...');
+        try{
+            System.debug(queryStr);
+            result = Database.query(queryStr);
+            System.debug('Returning ' + result.size() + ' result(s)...');
+        }
+        catch(Exception e) {
+            System.debug('SOME SHIT WENT WRONG: ' + e.getMessage());
+        }
 
         return result;
     }
@@ -83,13 +88,9 @@ public class QueryUtil {
      */
     public static String getTransformedQueryStr(String query) {
         String result = '';
-
-        // String regex = '^select\\s+\\*\\s*(?:,\\s*[^\\s]+\\s*)*\\s+from\\s+([^\\s]+)(.*)$';
-        // Matcher m = Pattern.compile(regex).matcher(query.toLowerCase());
         
-        Matcher outerQueryMatcher = Pattern.compile(regex_OuterQuery).matcher(query.toLowerCase());
-
-
+        //Matcher outerQueryMatcher = Pattern.compile(regex_OuterQuery).matcher(query.toLowerCase());
+        Matcher outerQueryMatcher = Pattern.compile(regex_OuterQuery).matcher(query);
 
         if(outerQueryMatcher.matches() && outerQueryMatcher.groupCount() == 3) {
             //If the outer query matches, there are three groups
@@ -98,7 +99,7 @@ public class QueryUtil {
             //3: anything after that (where clauses, limit clauses, etc)
             
             String fieldsRawString = outerQueryMatcher.group(1);
-            String sObjectName = outerQueryMatcher.group(2);
+            String sObjectName = outerQueryMatcher.group(2).toLowerCase();
             String remainder = outerQueryMatcher.group(3);
 
 
@@ -137,7 +138,7 @@ public class QueryUtil {
                 System.debug('FIELDCHECK: ' + field);
                 if(field.trim().left(1).equals('(')) {
                     //Relationship Query, so we need to get stuff relevant to the relationship
-                    Matcher innerQueryMatcher = Pattern.compile(regex_InnerQuery_Cap).matcher(field.toLowerCase().substring(1,field.length()-1).trim()); //Reove brackets, trim
+                    Matcher innerQueryMatcher = Pattern.compile(regex_InnerQuery_Cap).matcher(field.substring(1,field.length()-1).trim()); //Remove brackets, trim
                     System.debug('CHECKING INNER QUERY');
                     System.debug(innerQueryMatcher.matches());
                     System.debug(innerQueryMatcher.groupCount());
@@ -149,7 +150,7 @@ public class QueryUtil {
                         //3: anything after that (where clauses, limit clauses, etc)
                         
                         String innerFieldsRawString = innerQueryMatcher.group(1);
-                        String innerSObjectName = innerQueryMatcher.group(2);
+                        String innerSObjectName = innerQueryMatcher.group(2).toLowerCase();
                         String innerRemainder = innerQueryMatcher.group(3);
 
                         //For the inner sobjectname - this will be in the form of the relationship name on its parent, so we need to get
@@ -215,7 +216,7 @@ public class QueryUtil {
                 }
             }
 
-            result = 'select ' + String.join(fieldRequests,', ') + ' from ' + sObjectName + ' ' + remainder; 
+            result = 'select ' + String.join(fieldRequests,', ') + ' from ' + sObjectName + ' ' + remainder ; 
 
         } else {
             // System.debug('Either query string not in correct format or doesnt need transforming');
@@ -317,8 +318,14 @@ public class QueryUtil {
     }
 
     private static Boolean listContainsDups(List<String> theList) {
+        //Everything converted to lowercase first to fake case insensitivity
+        List<String> theListClone = theList.clone();
+        for(Integer index = 0; index < theList.size(); index++) {
+            theListClone[index] = theListClone[index].toLowerCase();
+        }
+
         Set<String> dupCheckSet = new Set<String>();
-        dupCheckSet.addAll(theList);
+        dupCheckSet.addAll(theListClone);
         
         if(dupCheckSet.size() != theList.size()) {
             return true;
