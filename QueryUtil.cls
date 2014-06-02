@@ -7,9 +7,9 @@
 public class QueryUtil {
 
     public Enum QueryType {OuterQuery,InnerQuery}
-
     public class QueryException extends Exception {}
 
+    /******* Fun With Regexes - lots of static strings compositing different regexes ******/
     public static final String regexChunk_FieldNames_StarFormat = '\\s*\\*\\s*';
     public static final String regexChunk_FieldNames_DotNotation = '\\s*\\w+\\.\\w+\\s*';
     public static final String regexChunk_FieldNames_Regular = '\\s*\\w+\\s*';
@@ -41,17 +41,37 @@ public class QueryUtil {
     
     public static final String regex_OuterQuery = ('(?i)select\\s+' + regexChunk_FieldNames_Composite_OuterQuery + '\\s+from\\s+([^\\s]+)(.*)');
 
+
+    /******* Describe caching *******/
+    //** Global Describe cache
     private static Map<String,SObjectType> GlobalDescribeCache {
-            get { 
-                if(GlobalDescribeCache == null) GlobalDescribeCache = Schema.getGlobalDescribe(); 
-                return GlobalDescribeCache; 
-            }
-            private set;
+        get { 
+            if(GlobalDescribeCache == null) GlobalDescribeCache = Schema.getGlobalDescribe(); 
+            return GlobalDescribeCache; 
         }
+        private set;
+    }
 
-    private static Map<Schema.SObjectType,List<String>> FieldNameCache = new Map<Schema.SObjectType,List<String>>();
-
+    //Private var and public helper methods for getting the describe info for a particular SObject, and key prefixes in particular
     private static Map<Schema.SObjectType, Schema.DescribeSObjectResult> ObjectDescribeCache = new Map<Schema.SObjectType, Schema.DescribeSObjectResult>();
+
+    private static DescribeSObjectResult retrieveDescribe(String targetTypeNameStr) {
+        return retrieveDescribe(GlobalDescribeCache.get(targetTypeNameStr));
+    }
+
+    private static DescribeSObjectResult retrieveDescribe(SObjectType targetType) {
+        Schema.DescribeSObjectResult describe = ObjectDescribeCache.get(targetType);
+        if(describe == null) {
+            ObjectDescribeCache.put(targetType, targetType.getDescribe());
+            describe = ObjectDescribeCache.get(targetType);
+        }
+        return describe;
+    }
+
+
+
+    /****** Field And Relationship caching *******/
+    private static Map<Schema.SObjectType,List<String>> FieldNameCache = new Map<Schema.SObjectType,List<String>>();
 
     private static Map<Schema.SObjectType, List<Schema.ChildRelationship>> ObjectRelationshipsCache = new Map<Schema.SObjectType, List<Schema.ChildRelationship>>();
 
@@ -59,6 +79,9 @@ public class QueryUtil {
     private static Map<Schema.SObjectType, Map<String,Schema.SObjectType>> ObjectRelationshipNamesToTypeCache = new Map<Schema.SObjectType, Map<String,Schema.SObjectType>>();
 
 
+
+    /******* Actual Code *******/
+    
     /*
      * Return query results as list of sObjects. 
      * Transform query string if it is in format "Select * From ..."
@@ -76,7 +99,7 @@ public class QueryUtil {
             System.debug('Returning ' + result.size() + ' result(s)...');
         }
         catch(Exception e) {
-            System.debug('SOME SHIT WENT WRONG: ' + e.getMessage());
+            System.debug('ERROR IN QUERYUTIL: ' + e.getMessage());
         }
 
         return result;
@@ -91,7 +114,6 @@ public class QueryUtil {
         
         //Matcher outerQueryMatcher = Pattern.compile(regex_OuterQuery).matcher(query.toLowerCase());
         Matcher outerQueryMatcher = Pattern.compile(regex_OuterQuery).matcher(query);
-
         if(outerQueryMatcher.matches() && outerQueryMatcher.groupCount() == 3) {
             //If the outer query matches, there are three groups
             //1: the fields we're querying (including any * queries, dot notation, or relationship queries)
@@ -270,14 +292,7 @@ public class QueryUtil {
         return fieldRequests;
     }
 
-    private static DescribeSObjectResult retrieveDescribe(SObjectType targetType) {
-        Schema.DescribeSObjectResult describe = ObjectDescribeCache.get(targetType);
-        if(describe == null) {
-            ObjectDescribeCache.put(targetType, targetType.getDescribe());
-            describe = ObjectDescribeCache.get(targetType);
-        }
-        return describe;
-    }
+    
 
     private static List<String> retrieveAllFieldList(SObjectType targetType, Schema.DescribeSObjectResult describe) {
         List<String> allFieldList = FieldNameCache.get(targetType);
@@ -334,4 +349,5 @@ public class QueryUtil {
             return false;
         }
     }
+
 }
